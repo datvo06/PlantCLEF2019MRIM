@@ -12,11 +12,11 @@ class PlanCLEF2017Dataset(Dataset):
 
     def __init__(self, root_eol, transform=None):
         with open(os.path.join(root_eol, 'keylist.txt'), 'r') as list_file:
-            self.lists_images = [line for line in list_file]
+            self.list_images = [line for line in list_file]
         with open(os.path.join(root_eol, 'list.txt'), 'r') as list_classes:
-            self.lists_classes = [line for line in list_classes]
-        self.lists_classes = [int(classname[5:])
-                              for classname in self.lists_classes]
+            self.list_classes = [line for line in list_classes]
+        self.list_classes = [int(classname[5:])
+                              for classname in self.list_classes]
         self.root_dir = root_eol
         if transform is not None:
             self.transform = transform
@@ -26,10 +26,10 @@ class PlanCLEF2017Dataset(Dataset):
 
     def __getitem__(self, idx):
         img_name = os.path.join(self.root_dir,
-                                self.lists_images[idx])
-        classId = int(os.path.dirname(self.lists_images[idx])[5:])
+                                self.list_images[idx])
+        classId = int(os.path.dirname(self.list_images[idx])[5:])
         image = skio.imread(img_name)
-        sample = {'image': image, 'id': self.lists_classes.index(classId)}
+        sample = {'image': image, 'id': self.list_classes.index(classId)}
         if self.transform:
             sample = self.transform(sample)
         return sample
