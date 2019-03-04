@@ -13,7 +13,7 @@ class PlanCLEF2017Dataset(Dataset):
     def __init__(self, root_eol, transform=None):
         with open(os.path.join(root_eol, 'keylist.txt'), 'r') as list_file:
             self.lists_images = [line for line in list_file]
-        with open(os.path.join(root_eol, 'lists.txt'), 'r') as list_classes:
+        with open(os.path.join(root_eol, 'list.txt'), 'r') as list_classes:
             self.lists_classes = [line for line in list_classes]
         self.lists_classes = [int(classname[5:])
                               for classname in self.lists_classes]
@@ -104,7 +104,7 @@ class ToTensor(object):
 
 
 transformed_dataset = PlanCLEF2017Dataset(
-    root_eol='video/clef/LifeCLEF/PlantCLEF2017/eol',
+    root_eol='/video/clef/LifeCLEF/PlantCLEF2017/eol',
     transform=transforms.Compose([
         Rescale(256),
         RandomCrop(224),
