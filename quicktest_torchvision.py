@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 import torchvision
 from torchvision import datasets, models, transforms
+from torch.utils.data.dataset import random_split
 import matplotlib.pyplot as plt
 import time
 import os
@@ -192,7 +193,9 @@ data_transforms = {
 print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
-image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in ['train', 'val']}
+image_datasets = {x: datasets.ImageFolder(data_dir, data_transforms[x]) for x in ['train']}
+train_dataset_len = image_datasets[‘train’].len()
+image_datasets[‘train’], image_datasets[‘val’] = random_split(image_datasets[‘train’],[int(train_dataset_len*0.9), train_dataset_len - int(train_dataset_len*0.9)])
 # Create training and validation dataloaders
 dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in ['train', 'val']}
 
