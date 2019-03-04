@@ -104,7 +104,7 @@ class ToTensor(object):
 
 
 transformed_dataset = PlanCLEF2017Dataset(
-    root_dir='video/clef/LifeCLEF/PlantCLEF2017/eol',
+    root_eol='video/clef/LifeCLEF/PlantCLEF2017/eol',
     transform=transforms.Compose([
         Rescale(256),
         RandomCrop(224),
