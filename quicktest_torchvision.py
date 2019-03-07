@@ -42,6 +42,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
     for epoch in range(num_epochs):
+        i = 0
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
         # Each epoch has a training and validation phase
@@ -52,7 +53,9 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                 model.eval()
             running_loss = 0.0
             running_corrects = 0
+            running_samples = 0
             for inputs, labels in dataloaders[phase]:
+                i += 1
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
@@ -73,6 +76,8 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
 
                 running_loss += loss.item()*inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                running_samples += np.prod(list(labels.data.size()))
+                print("batch: ", i, " - loss: ", running_loss/running_samples, "- acc: ", running_corrects.cpu().numpy()/running_samples)
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
@@ -194,8 +199,8 @@ print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
 image_datasets = {x: datasets.ImageFolder(data_dir, data_transforms[x]) for x in ['train']}
-train_dataset_len = image_datasets['train'].len()
-image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.9), train_dataset_len - int(train_dataset_len*0.9)])
+train_dataset_len = len(image_datasets['train'])
+image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
 # Create training and validation dataloaders
 dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in ['train', 'val']}
 
@@ -233,3 +238,5 @@ criterion = nn.CrossEntropyLoss()
 
 # Train and evaluate
 model_ft, hist = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))
+torch.save(model_ft, model_name + ".pth")
+torch.save(hist, model_name + ".hist")
