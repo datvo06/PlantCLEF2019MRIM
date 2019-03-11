@@ -17,7 +17,8 @@ print("Torchvision Version: ",torchvision.__version__)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Top level data directory. Here we assume the format of the directory conforms
 #   to the ImageFolder structure
-data_dir = "/video/clef/LifeCLEF/PlantCLEF2017/eol"
+data_dir = "/video/clef/LifeCLEF/PlantCLEF2017/eol/data"
+data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 
 # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
 model_name = "densenet"
@@ -199,8 +200,11 @@ print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
 image_datasets = {x: datasets.ImageFolder(data_dir, data_transforms[x]) for x in ['train']}
+image_datasets['val'] = datasets.ImageFolder(data_dir_web, data_transforms['val'])
+'''
 train_dataset_len = len(image_datasets['train'])
 image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+'''
 # Create training and validation dataloaders
 dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in ['train', 'val']}
 
