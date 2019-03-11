@@ -210,7 +210,6 @@ data_transforms = {
 print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
-<<<<<<< HEAD
 image_datasets = {x: datasets.ImageFolder(data_dir, data_transforms[x]) for x in ['train']}
 image_datasets['val'] = datasets.ImageFolder(data_dir_web, data_transforms['val'])
 '''
