@@ -7,6 +7,9 @@ import numpy as np
 import torchvision
 from torchvision import datasets, models, transforms
 from torch.utils.data.dataset import random_split
+import torch.utils.data
+
+
 import time
 import copy
 print("PyTorch Version: ", torch.__version__)
@@ -34,6 +37,20 @@ num_epochs = 30
 # Flag for feature extracting. When False, we finetune the whole model,
 #   when True we only update the reshaped layer params
 feature_extract = False
+
+
+def my_collate(batch):
+    batch = filter(lambda x: x is not None, batch)
+    return torch.utils.data.dataloader.default_collate(batch)
+
+
+class MyImageFolder(datasets.ImageFolder):
+    __init__ = ImageFolder.__init__
+    def __getitem__(self, index):
+        try:
+            return super(MyImageFolder, self).__getitem__(index)
+        except Exception as e:
+            print e  # Return None here for my_collate
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
@@ -210,8 +227,8 @@ data_transforms = {
 print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
-image_datasets = {x: datasets.ImageFolder(data_dir, data_transforms[x]) for x in ['train']}
-image_datasets['val'] = datasets.ImageFolder(data_dir_web, data_transforms['val'])
+image_datasets = {x: datasets.MyImageFolder(data_dir, data_transforms[x]) for x in ['train']}
+image_datasets['val'] = datasets.MyImageFolder(data_dir_web, data_transforms['val'])
 '''
 train_dataset_len = len(image_datasets['train'])
 image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
@@ -220,7 +237,7 @@ image_datasets['train'], image_datasets['val'] = random_split(image_datasets['tr
 dataloaders_dict = {x: torch.utils.data.DataLoader(
     image_datasets[x],
     batch_size=batch_size,
-    shuffle=True, num_workers=4) for x in ['train', 'val']}
+    shuffle=True, num_workers=4, collate_fn=my_collate) for x in ['train', 'val']}
 
 # Initialize the model for this run
 
