@@ -227,8 +227,8 @@ data_transforms = {
 print("Initializing Datasets and Dataloaders...")
 
 # Create training and validation datasets
-image_datasets = {x: datasets.MyImageFolder(data_dir, data_transforms[x]) for x in ['train']}
-image_datasets['val'] = datasets.MyImageFolder(data_dir_web, data_transforms['val'])
+image_datasets = {x: MyImageFolder(data_dir, data_transforms[x]) for x in ['train']}
+image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
 '''
 train_dataset_len = len(image_datasets['train'])
 image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
