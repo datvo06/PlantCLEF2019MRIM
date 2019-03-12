@@ -45,7 +45,7 @@ def my_collate(batch):
 
 
 class MyImageFolder(datasets.ImageFolder):
-    __init__ = ImageFolder.__init__
+    __init__ = datasets.ImageFolder.__init__
     def __getitem__(self, index):
         try:
             return super(MyImageFolder, self).__getitem__(index)
