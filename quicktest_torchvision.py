@@ -50,7 +50,7 @@ class MyImageFolder(datasets.ImageFolder):
         try:
             return super(MyImageFolder, self).__getitem__(index)
         except Exception as e:
-            print e  # Return None here for my_collate
+            print(e) # Return None here for my_collate
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
