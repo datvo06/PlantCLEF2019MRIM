@@ -128,6 +128,60 @@ def set_parameter_requires_grad(model, feature_extracting):
             param.requires_grad = False
 
 
+def initialize_model_no_pretrain(model_name, num_classes,
+                     feature_extract):
+    # Initialize these variables which will be set in this if statement.
+    # Each of these variables is model specific.
+    model_ft = None
+    input_size = 0
+
+    if model_name == "resnet":
+        """ Resnet18
+        """
+        model_ft = models.resnet18(pretrained=False, num_classes=num_classes)
+        input_size = 224
+
+    elif model_name == "alexnet":
+        """ Alexnet
+        """
+        model_ft = models.alexnet(pretrained=False, num_classes=num_classes)
+        input_size = 224
+
+    elif model_name == "vgg":
+        """ VGG11_bn
+        """
+        model_ft = models.vgg11_bn(pretrained=False,
+                                   num_classes=num_classes)
+        input_size = 224
+
+    elif model_name == "squeezenet":
+        """ Squeezenet
+        """
+        model_ft = models.squeezenet1_0(pretrained=False,
+                                        num_classes=num_classes)
+        input_size = 224
+
+    elif model_name == "densenet":
+        """ Densenet
+        """
+        model_ft = models.densenet121(pretrained=False,
+                                      num_classes=num_classes)
+        input_size = 224
+
+    elif model_name == "inception":
+        """ Inception v3
+        Be careful, expects (299,299) sized images and has auxiliary output
+        """
+        model_ft = models.inception_v3(pretrained=False,
+                                       num_classes=num_classes)
+        input_size = 299
+    else:
+        print("Invalid model name, exiting...")
+        exit()
+
+    return model_ft, input_size
+
+
 def initialize_model(model_name, num_classes,
                      feature_extract, use_pretrained=True):
     # Initialize these variables which will be set in this if statement.
@@ -175,7 +229,8 @@ def initialize_model(model_name, num_classes,
     elif model_name == "densenet":
         """ Densenet
         """
-        model_ft = models.densenet121(pretrained=use_pretrained)
+        model_ft = models.densenet121(pretrained=use_pretrained,
+                                      num_classes=num_classes)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier.in_features
         model_ft.classifier = nn.Linear(num_ftrs, num_classes)
@@ -202,8 +257,8 @@ def initialize_model(model_name, num_classes,
     return model_ft, input_size
 
 
-model_ft, input_size = initialize_model(model_name, num_classes,
-                                        feature_extract, use_pretrained=True)
+model_ft, input_size = initialize_model_no_pretrain(
+    model_name, num_classes, feature_extract)
 print(model_ft)
 
 # Data augmentation and normalization for training
