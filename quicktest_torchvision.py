@@ -32,7 +32,7 @@ num_classes = 10000
 batch_size = 8
 
 # Number of epochs to train for
-num_epochs = 30
+num_epochs = 100
 
 # Flag for feature extracting. When False, we finetune the whole model,
 #   when True we only update the reshaped layer params
@@ -96,10 +96,11 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
                 running_loss += loss.item()*inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
                 running_samples += np.prod(list(labels.data.size()))
-                print("batch: ", i, " - loss: ",
-                      running_loss/running_samples,
-                      "- acc: ",
-                      running_corrects.cpu().numpy()/running_samples)
+                if (i % 1000) == 0:
+                    print("batch: ", i, " - loss: ",
+                          running_loss/running_samples,
+                          "- acc: ",
+                          running_corrects.cpu().numpy()/running_samples)
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             epoch_acc = running_corrects.double() / len(
@@ -168,7 +169,7 @@ def initialize_model_no_pretrain(model_name, num_classes,
     elif model_name == "densenet":
         """ Densenet
         """
-        model_ft = models.densenet121(pretrained=False,
+        model_ft = models.densenet201(pretrained=False,
                                       num_classes=num_classes)
         input_size = 224
 
@@ -233,7 +234,7 @@ def initialize_model(model_name, num_classes,
     elif model_name == "densenet":
         """ Densenet
         """
-        model_ft = models.densenet121(pretrained=use_pretrained,
+        model_ft = models.densenet201(pretrained=use_pretrained,
                                       num_classes=num_classes)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier.in_features
@@ -289,10 +290,12 @@ if __name__ == '__main__':
     # Create training and validation datasets
     image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
                       for x in ['train']}
+    '''
     image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
     '''
     train_dataset_len = len(image_datasets['train'])
     image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+    '''
     '''
     # Create training and validation dataloaders
     dataloaders_dict = {x: torch.utils.data.DataLoader(
