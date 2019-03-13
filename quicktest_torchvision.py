@@ -54,7 +54,8 @@ class MyImageFolder(datasets.ImageFolder):
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
-                is_inception=False):
+                is_inception=False, save_model_every=10):
+    global model_name
     since = time.time()
     val_acc_history = []
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -113,6 +114,9 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
                 best_model_wts = copy.deepcopy(model.state_dict())
             if phase == 'val':
                 val_acc_history.append(epoch_acc)
+        if epoch % save_model_every == 0:
+            torch.save(model_ft, model_name + "_" + str(epoch) + ".pth")
+            torch.save(hist, model_name + "_" + str(epoch) + ".hist")
         print()
     time_elapsed = time.time() - since
     print("Training complete in {:.0f}m {:.0f}s".format(
@@ -257,80 +261,82 @@ def initialize_model(model_name, num_classes,
     return model_ft, input_size
 
 
-model_ft, input_size = initialize_model_no_pretrain(
-    model_name, num_classes, feature_extract)
-print(model_ft)
+if __name__ == '__main__':
+    model_ft, input_size = initialize_model_no_pretrain(
+        model_name, num_classes, feature_extract)
+    print(model_ft)
 
-# Data augmentation and normalization for training
-# Just normalization for validation
-data_transforms = {
-    'train': transforms.Compose([
-        transforms.RandomResizedCrop(input_size),
-        transforms.RandomRotation((0, 360)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'val': transforms.Compose([
-        transforms.Resize(input_size),
-        transforms.CenterCrop(input_size),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-}
+    # Data augmentation and normalization for training
+    # Just normalization for validation
+    data_transforms = {
+        'train': transforms.Compose([
+            transforms.RandomResizedCrop(input_size),
+            transforms.RandomRotation((0, 360)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        'val': transforms.Compose([
+            transforms.Resize(input_size),
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+    }
 
-print("Initializing Datasets and Dataloaders...")
+    print("Initializing Datasets and Dataloaders...")
 
-# Create training and validation datasets
-image_datasets = {x: MyImageFolder(data_dir, data_transforms[x]) for x in ['train']}
-image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
-'''
-train_dataset_len = len(image_datasets['train'])
-image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
-'''
-# Create training and validation dataloaders
-dataloaders_dict = {x: torch.utils.data.DataLoader(
-    image_datasets[x],
-    batch_size=batch_size,
-    shuffle=True, num_workers=4, collate_fn=my_collate) for x in ['train', 'val']}
+    # Create training and validation datasets
+    image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
+                      for x in ['train']}
+    image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
+    '''
+    train_dataset_len = len(image_datasets['train'])
+    image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+    '''
+    # Create training and validation dataloaders
+    dataloaders_dict = {x: torch.utils.data.DataLoader(
+        image_datasets[x],
+        batch_size=batch_size,
+        shuffle=True, num_workers=4, collate_fn=my_collate) for x in ['train', 'val']}
 
-# Initialize the model for this run
+    # Initialize the model for this run
 
-# Print the model we just instantiated
+    # Print the model we just instantiated
 
-# Send the model to GPU
-model_ft = model_ft.to(device)
+    # Send the model to GPU
+    model_ft = model_ft.to(device)
 
-# Gather the parameters to be optimized/updated in this run. If we are
-#  finetuning we will be updating all parameters. However, if we are
-#  doing feature extract method, we will only update the parameters
-#  that we have just initialized, i.e. the parameters with requires_grad
-#  is True.
-params_to_update = model_ft.parameters()
-print("Params to learn:")
-if feature_extract:
-    params_to_update = []
-    for name, param in model_ft.named_parameters():
-        if param.requires_grad:
-            params_to_update.append(param)
-            print("\t", name)
-else:
-    for name, param in model_ft.named_parameters():
-        if param.requires_grad:
-            print("\t", name)
+    # Gather the parameters to be optimized/updated in this run. If we are
+    #  finetuning we will be updating all parameters. However, if we are
+    #  doing feature extract method, we will only update the parameters
+    #  that we have just initialized, i.e. the parameters with requires_grad
+    #  is True.
+    params_to_update = model_ft.parameters()
+    print("Params to learn:")
+    if feature_extract:
+        params_to_update = []
+        for name, param in model_ft.named_parameters():
+            if param.requires_grad:
+                params_to_update.append(param)
+                print("\t", name)
+    else:
+        for name, param in model_ft.named_parameters():
+            if param.requires_grad:
+                print("\t", name)
 
-# Observe that all parameters are being optimized
-optimizer_ft = optim.SGD(params_to_update, lr=0.001, momentum=0.9)
+    # Observe that all parameters are being optimized
+    optimizer_ft = optim.SGD(params_to_update, lr=0.001, momentum=0.9)
 
 
-# Setup the loss fxn
-criterion = nn.CrossEntropyLoss()
+    # Setup the loss fxn
+    criterion = nn.CrossEntropyLoss()
 
-# Train and evaluate
-model_ft, hist = train_model(model_ft, dataloaders_dict,
-                             criterion, optimizer_ft,
-                             num_epochs=num_epochs,
-                             is_inception=(model_name == "inception")
-                             )
-torch.save(model_ft, model_name + ".pth")
-torch.save(hist, model_name + ".hist")
+    # Train and evaluate
+    model_ft, hist = train_model(model_ft, dataloaders_dict,
+                                criterion, optimizer_ft,
+                                num_epochs=num_epochs,
+                                is_inception=(model_name == "inception")
+                                )
+    torch.save(model_ft, model_name + ".pth")
+    torch.save(hist, model_name + ".hist")
