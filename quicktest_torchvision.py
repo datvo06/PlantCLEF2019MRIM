@@ -262,8 +262,8 @@ def initialize_model(model_name, num_classes,
 
 
 if __name__ == '__main__':
-    model_ft, input_size = initialize_model_no_pretrain(
-        model_name, num_classes, feature_extract)
+    model_ft, input_size = initialize_model(model_name, num_classes,
+                                      feature_extract, use_pretrained=True)
     print(model_ft)
 
     # Data augmentation and normalization for training
