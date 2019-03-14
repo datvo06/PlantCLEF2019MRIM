@@ -117,7 +117,8 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
             if phase == 'val':
                 val_acc_history.append(epoch_acc)
         if epoch % save_model_every == 0:
-            torch.save(model_ft, model_name + "_" + str(epoch) + ".pth")
+            torch.save(model_ft.state_dict(),
+                       model_name + "_dict_" + str(epoch) + ".pth")
             torch.save(val_acc_history,
                        model_name + "_" + str(epoch) + ".hist")
         print()
