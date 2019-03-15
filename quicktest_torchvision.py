@@ -1,5 +1,6 @@
 from __future__ import print_function
 from __future__ import division
+import sys
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -117,8 +118,10 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
             if phase == 'val':
                 val_acc_history.append(epoch_acc)
         if epoch % save_model_every == 0:
-            torch.save(model_ft, model_name + "_" + str(epoch) + ".pth")
-            torch.save(val_acc_history, model_name + "_" + str(epoch) + ".hist")
+            torch.save(model_ft.state_dict(),
+                       model_name + "_dict_" + str(epoch) + ".pth")
+            torch.save(val_acc_history,
+                       model_name + "_" + str(epoch) + ".hist")
         print()
     time_elapsed = time.time() - since
     print("Training complete in {:.0f}m {:.0f}s".format(
@@ -213,8 +216,9 @@ def initialize_model(model_name, num_classes,
 
 if __name__ == '__main__':
     model_ft, input_size = initialize_model(model_name, num_classes,
-                                     feature_extract, use_pretrained=True)
-    # model_ft, input_size = torch.load('save_0.pth'), 224
+                                    feature_extract, use_pretrained=True)
+    if (len(sys.argv) >= 2):
+        model_ft.load_state_dict(torch.load(sys.argv[1]))
     print(model_ft)
 
     # Data augmentation and normalization for training
@@ -291,5 +295,5 @@ if __name__ == '__main__':
                                 num_epochs=num_epochs,
                                 is_inception=(model_name == "inception")
                                 )
-    torch.save(model_ft, model_name + ".pth")
+    torch.save(model_ft.state_dict(), model_name + ".pth")
     torch.save(hist, model_name + ".hist")
