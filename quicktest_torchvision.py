@@ -277,7 +277,6 @@ if __name__ == '__main__':
     weights = make_weights_for_balanced_classes(
         image_datasets['train'].imgs,
         len(image_datasets['train'].classes))
-    print("Num classes: ", len(image_datasets['train'].classes))
 
     weights = torch.DoubleTensor(weights)
     sampler = torch.utils.data.sampler.WeightedRandomSampler(
@@ -287,15 +286,21 @@ if __name__ == '__main__':
     image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
     '''
     train_dataset_len = len(image_datasets['train'])
-    image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+    _, image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
     '''
     '''
     # Create training and validation dataloaders
-    dataloaders_dict = {x: torch.utils.data.DataLoader(
-        image_datasets[x],
+    dataloaders_dict = {'train': torch.utils.data.DataLoader(
+        image_datasets['train'],
         batch_size=batch_size,
-        shuffle=True, num_workers=4, collate_fn=my_collate,
-        sampler=sampler) for x in ['train', 'val']}
+        num_workers=4, collate_fn=my_collate,
+        sampler=sampler),
+        'val': torch.utils.data.DataLoader(
+                image_datasets['val'],
+                batch_size=batch_size,
+                num_workers=4, collate_fn=my_collate
+                )
+        }
 
     # Initialize the model for this run
 
