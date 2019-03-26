@@ -20,7 +20,7 @@ print("Torchvision Version: ", torchvision.__version__)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Top level data directory. Here we assume the format of the directory conforms
 # to the ImageFolder structure
-data_dir = "/video/clef/LifeCLEF/PlantCLEF2017/eol/data"
+data_dir = "/video/clef/LifeCLEF/PlantCLEF2019/train/data"
 data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 
 
@@ -28,10 +28,10 @@ data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 model_name = "densenet"
 
 # Number of classes in the dataset
-num_classes = 10000
+num_classes = 8500
 
 # Batch size for training (change depending on how much memory you have)
-batch_size = 8
+batch_size = 32
 
 # Number of epochs to train for
 num_epochs = 100
@@ -218,7 +218,23 @@ if __name__ == '__main__':
     model_ft, input_size = initialize_model(model_name, num_classes,
                                     feature_extract, use_pretrained=True)
     if (len(sys.argv) >= 2):
-        model_ft.load_state_dict(torch.load(sys.argv[1]))
+        try:
+            model_dict = model_ft.state_dict()
+            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            model_ft.load_state_dict(pretrained_dict)
+        except:
+            pretrained_dict = torch.load(sys.argv[1])
+            model_ft = models.densenet201(pretrained=False)
+            set_parameter_requires_grad(model_ft, feature_extract)
+            num_ftrs = model_ft.classifier.in_features
+            model_ft.classifier = nn.Linear(num_ftrs, 10000)
+            model_dict = model_ft.state_dict()
+            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            model_ft.load_state_dict(pretrained_dict)
+            num_ftrs = model_ft.classifier.in_features
+            model_ft.classifier = nn.Linear(num_ftrs, num_classes)
     print(model_ft)
 
     # Data augmentation and normalization for training
@@ -244,6 +260,16 @@ if __name__ == '__main__':
     # Create training and validation datasets
     image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
                       for x in ['train']}
+    target = image_datasets['train'].train_labels
+    class_sample_count = np.unique(target, return_counts=True)[1]
+    print(class_sample_count)
+
+    weight = 1. / class_sample_count
+    samples_weight = weight[target]
+    samples_weight = torch.from_numpy(samples_weight)
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight, len(samples_weight))
+
+
     '''
     image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
     '''
@@ -255,7 +281,8 @@ if __name__ == '__main__':
     dataloaders_dict = {x: torch.utils.data.DataLoader(
         image_datasets[x],
         batch_size=batch_size,
-        shuffle=True, num_workers=4, collate_fn=my_collate) for x in ['train', 'val']}
+        shuffle=True, num_workers=4, collate_fn=my_collate,
+        sampler=sampler) for x in ['train', 'val']}
 
     # Initialize the model for this run
 
