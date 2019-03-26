@@ -41,6 +41,20 @@ num_epochs = 100
 feature_extract = False
 
 
+def make_weights_for_balanced_classes(images, nclasses):
+    count = [0] * nclasses
+    for item in images:
+        count[item[1]] += 1
+    weight_per_class = [0.] * nclasses
+    N = float(sum(count))
+    for i in range(nclasses):
+        weight_per_class[i] = N/float(count[i])
+    weight = [0] * len(images)
+    for idx, val in enumerate(images):
+        weight[idx] = weight_per_class[val[1]]
+    return weight
+
+
 def my_collate(batch):
     batch = list(filter(lambda x: x is not None, batch))
     return torch.utils.data.dataloader.default_collate(batch)
@@ -260,15 +274,14 @@ if __name__ == '__main__':
     # Create training and validation datasets
     image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
                       for x in ['train']}
-    target = image_datasets['train'].train_labels
-    class_sample_count = np.unique(target, return_counts=True)[1]
-    print(class_sample_count)
+    weights = make_weights_for_balanced_classes(
+        image_datasets['train'].imgs,
+        len(image_datasets['train'].classes))
+    print("Num classes: ", len(image_datasets['train'].classes))
 
-    weight = 1. / class_sample_count
-    samples_weight = weight[target]
-    samples_weight = torch.from_numpy(samples_weight)
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight, len(samples_weight))
-
+    weights = torch.DoubleTensor(weights)
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(
+        weights, len(weights))
 
     '''
     image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
