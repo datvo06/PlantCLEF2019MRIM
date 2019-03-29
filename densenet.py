@@ -40,7 +40,7 @@ class CustomAttentConv(torch.nn.Module):
 
 def hw_flatten(x):
     batch_size = x.size()[0]
-    return x.view(batch_size, -1, x.size()[-1])
+    return x.view(batch_size, x.size()[1], -1)
 
 
 class SelfAttentionBlock(torch.nn.Module):
@@ -58,12 +58,13 @@ class SelfAttentionBlock(torch.nn.Module):
         self.softmax = torch.nn.Softmax(dim=-1)     # relation/attention map
 
     def forward(self, x):
-        out_f = self.f(x)
-        out_g = self.g(x)
-        out_h = self.h(x)
-        s = torch.matmul(hw_flatten(out_g), hw_flatten(out_f))
+        out_f = self.f(x)  # F: [batch, bottle_depth, H, W]
+        out_g = self.g(x)  # G: [batch, bottle_depth, H, W]
+        out_h = self.h(x)  # H: [batch, depth, H, W]
+        s = torch.matmul(torch.transpose(hw_flatten(out_g), 1, 2),
+                         hw_flatten(out_f))
         beta = self.softmax(s)
-        o = torch.matmul(beta, hw_flatten(out_h))
+        o = torch.matmul(hw_flatten(out_h), beta)
         o = torch.view(o, x.size())
         x = o + x
         return x
@@ -144,12 +145,16 @@ class DenseNet(nn.Module):
         # Each denseblock
         num_features = num_init_features
         for i, num_layers in enumerate(block_config):
-            block = _DenseBlock(num_layers=num_layers, num_input_features=num_features,
-                                bn_size=bn_size, growth_rate=growth_rate, drop_rate=drop_rate)
+            block = _DenseBlock(num_layers=num_layers,
+                                num_input_features=num_features,
+                                bn_size=bn_size,
+                                growth_rate=growth_rate,
+                                drop_rate=drop_rate)
             self.features.add_module('denseblock%d' % (i + 1), block)
             num_features = num_features + num_layers * growth_rate
             if i != len(block_config) - 1:
-                trans = _Transition(num_input_features=num_features, num_output_features=num_features // 2)
+                trans = _Transition(num_input_features=num_features,
+                                    num_output_features=num_features // 2)
                 self.features.add_module('transition%d' % (i + 1), trans)
                 num_features = num_features // 2
 
