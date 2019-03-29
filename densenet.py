@@ -98,9 +98,7 @@ class _DenseBlock(nn.Sequential):
             layer = _DenseLayer(num_input_features + i * growth_rate,
                                 growth_rate, bn_size, drop_rate)
             self.add_module('denselayer%d' % (i + 1), layer)
-        self.add_module('self_attention', SelfAttentionBlock(
-            num_input_features + num_layers * growth_rate
-        ))
+
 
 
 class _Transition(nn.Sequential):
@@ -152,6 +150,10 @@ class DenseNet(nn.Module):
                                 drop_rate=drop_rate)
             self.features.add_module('denseblock%d' % (i + 1), block)
             num_features = num_features + num_layers * growth_rate
+            if i == 2:
+                self.add_module('self_attention', SelfAttentionBlock(
+                    num_features
+                    ))
             if i != len(block_config) - 1:
                 trans = _Transition(num_input_features=num_features,
                                     num_output_features=num_features // 2)
