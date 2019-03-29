@@ -22,6 +22,7 @@ model_urls = {
 class CustomAttentConv(torch.nn.Module):
     def __init__(self, in_channels, channels, kernel=4, stride=2, pad=0,
                  pad_type='zero', use_bias=True, sn=False):
+        super(CustomAttentConv, self).__init__()
         paddings = [pad, pad]
         self.pad = torch.nn.ConstantPad2d(paddings, 0)\
             if pad_type == 'zero' else torch.nn.ReflectionPad2d(paddings)
@@ -44,6 +45,7 @@ def hw_flatten(x):
 
 class SelfAttentionBlock(torch.nn.Module):
     def __init__(self, input_channels, num_heads=8, sn=False):
+        super(SelfAttentionBlock, self).__init__()
         ch = input_channels
         self.f = CustomAttentConv(
             input_channels, ch//num_heads, kernel=1, stride=1,
