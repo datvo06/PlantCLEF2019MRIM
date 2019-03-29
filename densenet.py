@@ -23,7 +23,7 @@ class CustomAttentConv(torch.nn.Module):
     def __init__(self, in_channels, channels, kernel=4, stride=2, pad=0,
                  pad_type='zero', use_bias=True, sn=False):
         paddings = [pad, pad]
-        self.pad = torch.nn.ConstantPad2d(paddings)\
+        self.pad = torch.nn.ConstantPad2d(paddings, 0)\
             if pad_type == 'zero' else torch.nn.ReflectionPad2d(paddings)
         if sn:
             self.conv = torch.nn.Conv2d(in_channels, channels, kernel,
