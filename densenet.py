@@ -65,7 +65,7 @@ class SelfAttentionBlock(torch.nn.Module):
                          hw_flatten(out_f))
         beta = self.softmax(s)
         o = torch.matmul(hw_flatten(out_h), beta)
-        o = torch.view(o, x.size())
+        o = o.view(x.size())
         x = o + x
         return x
 
