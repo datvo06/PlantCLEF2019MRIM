@@ -230,7 +230,7 @@ def initialize_model(model_name, num_classes,
 
 if __name__ == '__main__':
     model_ft, input_size = initialize_model(model_name, num_classes,
-                                    feature_extract, use_pretrained=True)
+                                    feature_extract, use_pretrained=False)
     if (len(sys.argv) >= 2):
         try:
             model_dict = model_ft.state_dict()
