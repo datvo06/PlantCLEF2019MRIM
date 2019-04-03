@@ -20,7 +20,7 @@ print("Torchvision Version: ", torchvision.__version__)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Top level data directory. Here we assume the format of the directory conforms
 # to the ImageFolder structure
-data_dir = "/video/clef/LifeCLEF/PlantCLEF2017/eol/data"
+data_dir = "/video/clef/LifeCLEF/PlantCLEF2019/train/data"
 data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 
 
@@ -28,17 +28,30 @@ data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 model_name = "densenet"
 
 # Number of classes in the dataset
-num_classes = 10000
+num_classes = 8500
 
 # Batch size for training (change depending on how much memory you have)
 batch_size = 48
-
 # Number of epochs to train for
 num_epochs = 100
 
 # Flag for feature extracting. When False, we finetune the whole model,
 #   when True we only update the reshaped layer params
 feature_extract = False
+
+
+def make_weights_for_balanced_classes(images, nclasses):
+    count = [0] * nclasses
+    for item in images:
+        count[item[1]] += 1
+    weight_per_class = [0.] * nclasses
+    N = float(sum(count))
+    for i in range(nclasses):
+        weight_per_class[i] = N/float(count[i])
+    weight = [0] * len(images)
+    for idx, val in enumerate(images):
+        weight[idx] = weight_per_class[val[1]]
+    return weight
 
 
 def my_collate(batch):
@@ -216,9 +229,25 @@ def initialize_model(model_name, num_classes,
 
 if __name__ == '__main__':
     model_ft, input_size = initialize_model(model_name, num_classes,
-                                    feature_extract, use_pretrained=True)
+                                    feature_extract, use_pretrained=False)
     if (len(sys.argv) >= 2):
-        model_ft.load_state_dict(torch.load(sys.argv[1]))
+        try:
+            model_dict = model_ft.state_dict()
+            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            model_ft.load_state_dict(pretrained_dict)
+        except:
+            pretrained_dict = torch.load(sys.argv[1])
+            model_ft = models.densenet201(pretrained=False)
+            set_parameter_requires_grad(model_ft, feature_extract)
+            num_ftrs = model_ft.classifier.in_features
+            model_ft.classifier = nn.Linear(num_ftrs, 10000)
+            model_dict = model_ft.state_dict()
+            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            model_ft.load_state_dict(pretrained_dict)
+            num_ftrs = model_ft.classifier.in_features
+            model_ft.classifier = nn.Linear(num_ftrs, num_classes)
     print(model_ft)
 
     # Data augmentation and normalization for training
@@ -244,18 +273,33 @@ if __name__ == '__main__':
     # Create training and validation datasets
     image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
                       for x in ['train']}
+    weights = make_weights_for_balanced_classes(
+        image_datasets['train'].imgs,
+        len(image_datasets['train'].classes))
+
+    weights = torch.DoubleTensor(weights)
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(
+        weights, len(weights))
+
     '''
     image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
     '''
     train_dataset_len = len(image_datasets['train'])
-    image_datasets['train'], image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+    _, image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
     '''
     '''
     # Create training and validation dataloaders
-    dataloaders_dict = {x: torch.utils.data.DataLoader(
-        image_datasets[x],
+    dataloaders_dict = {'train': torch.utils.data.DataLoader(
+        image_datasets['train'],
         batch_size=batch_size,
-        shuffle=True, num_workers=4, collate_fn=my_collate) for x in ['train', 'val']}
+        num_workers=4, collate_fn=my_collate,
+        sampler=sampler),
+        'val': torch.utils.data.DataLoader(
+                image_datasets['val'],
+                batch_size=batch_size,
+                num_workers=4, collate_fn=my_collate
+                )
+        }
 
     # Initialize the model for this run
 

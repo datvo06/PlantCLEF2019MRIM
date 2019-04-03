@@ -4,7 +4,6 @@ from PIL import Image
 
 data_dir = "/video/clef/LifeCLEF/PlantCLEF2019/train/data"
 out_list = "list_smallsize.txt"
-out_list = "list_smallsize.txt"
 unopenable_list = "list_unopenable.txt"
 out_file = open(out_list, "a")
 unopenable_file = open(unopenable_list, "a")
