@@ -31,8 +31,7 @@ model_name = "densenet"
 num_classes = 8500
 
 # Batch size for training (change depending on how much memory you have)
-batch_size = 32
-
+batch_size = 48
 # Number of epochs to train for
 num_epochs = 100
 
@@ -198,7 +197,7 @@ def initialize_model(model_name, num_classes,
     elif model_name == "densenet":
         """ Densenet
         """
-        model_ft = models.densenet201(pretrained=use_pretrained)
+        model_ft = models.densenet121(pretrained=use_pretrained)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier.in_features
         model_ft.classifier = nn.Linear(num_ftrs, num_classes)
