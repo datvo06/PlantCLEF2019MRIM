@@ -86,8 +86,10 @@ def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
 def remove_file_by_names(class_id_map, class_id_list_files, list_files):
     list_files_names = list([filename.split(".")[0]
                              for filename in list_files])
+
+    list_files_names = sorted(list_files_names)
     inverse_class_id_map = list([(class_id[1], class_id[0])
-                                 for class_id in class_id_map])
+                                 for class_id in class_id_map.items()])
 
     inverse_class_id_map = dict(inverse_class_id_map)
     # Sort it, N log N
@@ -107,18 +109,22 @@ def remove_file_by_names(class_id_map, class_id_list_files, list_files):
     curr_idx = 0
     deleting_idx = []
     # O(N)
-    for filename in list_files_names:
+    for index, filename in enumerate(list_files_names):
         while(curr_idx < len(filename_merged) and
               filename_merged[filename_sorted_idx[curr_idx]] < filename
               ):
             curr_idx += 1
         if filename_merged[filename_sorted_idx[curr_idx]] == filename:
+            duplicated = 0
+            # print(index)
             while(
                 curr_idx < len(filename_merged) and
                 filename_merged[filename_sorted_idx[curr_idx]] == filename
                   ):
                 deleting_idx.append(filename_sorted_idx[curr_idx])
+                duplicated += 1
                 curr_idx += 1
+    print("list file names deleted: ", len(deleting_idx))
     # O(NlogN)
     deleting_idx = sorted(deleting_idx)[::-1]  # From top down
     # O(N)
@@ -129,10 +135,10 @@ def remove_file_by_names(class_id_map, class_id_list_files, list_files):
     class_id_list_files_new = [[] for i in range(len(inverse_class_id_map))]
     for filepath in filepath_merged:
         # file_dir, filename = os.path.split(filepath)
-        file_par_dir = os.path.dirname(filepath)
+        file_par_dir = os.path.basename(os.path.dirname(filepath))
         class_id_list_files_new[inverse_class_id_map[file_par_dir]].append(
             filepath)
-    return class_id_list_files
+    return class_id_list_files_new
 
 
 def remove_multiples(class_id_map, class_id_list_files, list_multiples,
@@ -143,6 +149,7 @@ def remove_multiples(class_id_map, class_id_list_files, list_multiples,
     # Let's search for each of the class and remove all duplicated ids
     list_removes = [filepair[0] for filepair in list_multiples if
                     filepair[1] > maximum_allowed]
+    print(len(list_removes))
     class_id_list_files_new = remove_file_by_names(
         class_id_map, class_id_list_files, list_removes)
     # Just for debugging
