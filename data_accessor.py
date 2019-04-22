@@ -67,7 +67,7 @@ def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
         num_samples = len(class_id_list_files[each_class_id])
         num_sample_val = math.ceil(num_samples*(1-split_ratio_train))
         # Pick out these samples
-        chosen_vals = np.random.choice(num_samples, num_sample_val)
+        chosen_vals = np.random.shuffle(num_samples)[:num_sample_val]
         # Sort the chosen val from largest to smallest
         chosen_vals = np.sort(chosen_vals)[::-1]
         for chosen_val in chosen_vals:
