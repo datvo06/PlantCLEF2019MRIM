@@ -40,21 +40,21 @@ def detect_files_with_limited_num_colors(list_files):
             num_unique_colors = np.unique(img, axis=0)
         except:
             continue
-        if num_unique_colors.shape[0] < 6:
+        if num_unique_colors.shape[0] < 10:
             print("Num unique_colors: ", num_unique_colors.shape[0])
             list_files_out.append(each_file)
             list_count_out.append(num_unique_colors.shape[0])
-    return list_file_out, list_count_out
+    return list_files_out, list_count_out
 
 
 def copy_files(list_files, out_dir):
-    list_file_out, list_count_out = detect_files_with_limited_num_colors(list_files)
+    list_files_out, list_count_out = detect_files_with_limited_num_colors(list_files)
     sorted_indices = sorted_idx(list_count_out)[::-1]
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     with open(os.path.join(out_dir, 'list_files.txt'), 'w') as list_file_fp:
         for idx in sorted_indices:
-            filepath = list_file_out[idx]
+            filepath = list_files_out[idx]
             count_out =  list_count_out[idx]
             list_file_fp.write(filepath + " - " + str(list_count_out) + "\n")
             filename = os.path.split(filepath)[1]
