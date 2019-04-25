@@ -14,7 +14,7 @@ def my_collate(batch):
 
 
 class PlantCLEFDataSet(object):
-    def __init__(self, class_id_map, class_id_list_files, transform=None):
+    def __init__(self, class_id_map, class_id_list_files, transform=None, is_train=False):
         '''Let's load all the files
         Args:
             class_id_map: a mapping from list of id to list of real class id
@@ -37,6 +37,8 @@ class PlantCLEFDataSet(object):
         self.class_weights_normed = class_weights/np.sum(
             class_weights)
         self.transform = transform
+        print("Number of empty classes: ",
+              len(self.class_id_list_files) - self.non_zero_index.shape[0])
 
     def __len__(self):
         return sum(self.class_lens)
@@ -52,7 +54,7 @@ class PlantCLEFDataSet(object):
             return None
         if self.transform is not None:
             sample = self.transform(sample)
-        return sample, class_id
+        return sample, self.non_zero_index[class_id]
 
 
 def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
