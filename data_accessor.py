@@ -6,6 +6,7 @@ import numpy as np
 import math
 from numpy.random import choice
 from PIL import Image
+import random
 
 
 def my_collate(batch):
@@ -14,7 +15,9 @@ def my_collate(batch):
 
 
 class PlantCLEFDataSet(object):
-    def __init__(self, class_id_map, class_id_list_files, transform=None, is_train=False):
+    def __init__(self, class_id_map, class_id_list_files,
+                 transform=None,
+                 is_train=False, min_samples=40):
         '''Let's load all the files
         Args:
             class_id_map: a mapping from list of id to list of real class id
@@ -23,11 +26,42 @@ class PlantCLEFDataSet(object):
         '''
         self.class_id_map = class_id_map
         self.class_id_list_files = class_id_list_files
+        inverse_class_id_map = list(
+            [(class_id[1], class_id[0]) for class_id in class_id_map.items()])
+        self.inverse_class_id_map = dict(inverse_class_id_map)
+
         self.class_lens = list(
             [len(class_id_list)
              for class_id_list in self.class_id_list_files]
         )
+        # Let's sort classes from lowest to highest
+        # Then resample it so that each class at least a minimum number of
+        # samples
         self.class_lens = np.array(self.class_lens)
+        if is_train:
+            for class_id in range(len(self.class_id_list_files)):
+                if len(self.class_id_list_files[class_id]) == 0:
+                    continue
+                if len(self.class_id_list_files[class_id]) < min_samples:
+                    repeat = math.ceil(
+                        min_samples/len(self.class_lens[class_id]))
+                    self.class_id_list_files[class_id] =\
+                        self.class_id_list_files[class_id] * repeat
+                    self.class_id_list_files[class_id] =\
+                        self.class_id_list_files[class_id][:min_samples]
+        self.class_lens = list(
+            [len(class_id_list)
+             for class_id_list in self.class_id_list_files]
+        )
+
+        # Flatten them all then shuffle
+        self.filepath_merged = []
+        for each_class_id in range(len(self.class_id_list_files)):
+            self.filepath_merged.extend(
+                self.class_id_list_files[each_class_id])
+        random.shuffle(self.filepath_merged)
+        # Shuffle them up
+        '''
         random_drawing = np.array(self.class_lens)
         self.non_zero_index = np.where(self.class_lens > 0)[0]
         non_zero_class = self.class_lens > 0
@@ -39,22 +73,42 @@ class PlantCLEFDataSet(object):
         self.transform = transform
         print("Number of empty classes: ",
               len(self.class_id_list_files) - self.non_zero_index.shape[0])
+              '''
 
     def __len__(self):
-        return sum(self.class_lens)
+        return len(self.filepath_merged)
 
-    def __getitem__(self, idx):
+    def get_random_sample(self):
         # Get a random image from a random class weighted
-        class_id = choice(self.non_zero_index.shape[0], p=self.class_weights_normed)
-        sampler_id = choice(len(self.class_id_list_files[self.non_zero_index[class_id]]))
+        class_id = choice(self.non_zero_index.shape[0],
+                          p=self.class_weights_normed)
+        sampler_id = choice(
+            len(self.class_id_list_files[self.non_zero_index[class_id]]))
         # Simply ignore sample if fail to open
         try:
-            sample = Image.open(self.class_id_list_files[self.non_zero_index[class_id]][sampler_id]).convert('RGB')
+            sample = Image.open(
+                self.class_id_list_files[
+                    self.non_zero_index[class_id]
+                ][sampler_id]).convert('RGB')
         except Exception:
             return None
         if self.transform is not None:
             sample = self.transform(sample)
         return sample, self.non_zero_index[class_id]
+
+    def __getitem__(self, idx):
+        filepath = self.filepath_merged[idx]
+        try:
+            sample = Image.open(filepath).convert('RGB')
+        except Exception:
+            return None
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        class_name = os.path.basename(os.path.dirname(filepath))
+        class_id = self.inverse_class_id_map[class_name]
+        return sample, class_id
+
 
 
 def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
@@ -88,7 +142,8 @@ def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
                                    transform=plant_clef_dataset.transform)
     train_dataset = PlantCLEFDataSet(class_id_map,
                                      class_id_list_files,
-                                     transform=plant_clef_dataset.transform)
+                                     transform=plant_clef_dataset.transform,
+                                     is_train=True)
     return train_dataset, val_dataset
 
 
