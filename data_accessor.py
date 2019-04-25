@@ -37,6 +37,7 @@ class PlantCLEFDataSet(object):
         # Let's sort classes from lowest to highest
         # Then resample it so that each class at least a minimum number of
         # samples
+        self.transform = transform
         self.class_lens = np.array(self.class_lens)
         if is_train:
             for class_id in range(len(self.class_id_list_files)):
@@ -70,7 +71,6 @@ class PlantCLEFDataSet(object):
         class_weights = np.ones_like(class_probs)/class_probs
         self.class_weights_normed = class_weights/np.sum(
             class_weights)
-        self.transform = transform
         print("Number of empty classes: ",
               len(self.class_id_list_files) - self.non_zero_index.shape[0])
               '''
