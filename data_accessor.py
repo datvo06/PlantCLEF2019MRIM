@@ -45,7 +45,7 @@ class PlantCLEFDataSet(object):
                     continue
                 if len(self.class_id_list_files[class_id]) < min_samples:
                     repeat = math.ceil(
-                        min_samples/len(self.class_lens[class_id]))
+                        min_samples/self.class_lens[class_id].shape[0])
                     self.class_id_list_files[class_id] =\
                         self.class_id_list_files[class_id] * repeat
                     self.class_id_list_files[class_id] =\
