@@ -259,3 +259,44 @@ def get_list_removed_files(src_dir, dst_dir):
                 curr_idx += 1
     print("List removed len: ", len(list_removeds))
     return list_removeds
+
+
+def remodel_distribution(dataset1, dataset2):
+    '''Remodel dataset1 samples distribution to that of dataset2
+    dataset: class_id_map and list files
+    '''
+    class_id_map1, class_files1 = dataset1
+    class_id_map2, class_files2 = dataset2
+    assert len(class_files1) == len(class_files2), \
+        "Number of classes must be equal"
+    assert all(len(class_file_list) != 0 for class_file_list in class_files1),\
+        "Number of samples must be atleast 1"
+    # First, get all class lens
+    class_lens1 = [len(class_file_list) for class_file_list in class_files1]
+    class_lens2 = [len(class_file_list) for class_file_list in class_files2]
+    # Then sort them
+    class_len_id_sorted1 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens1[i])
+    class_len_id_sorted2 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens2[i])
+    # Get the inverse map also
+    # inv_maps1 = dict([(item[1], item[0]) for item in class_id_map1.items()])
+    # inv_maps2 = dict([(item[1], item[0]) for item in class_id_map2.items()])
+    new_class_files = [[] for i in range(len(class_files1))]
+    for i, original_id1 in enumerate(class_len_id_sorted1):
+        # Get this class len
+        len1 = class_lens1[original_id1]
+        len2 = class_lens2[class_len_id_sorted2[i]]
+        if len1 < len2:
+            # If len 1 < len 2: repeat
+            repeat = math.ceil(float(len2)/len1)
+            new_class_files[class_len_id_sorted1[i]] = (
+                class_files1[class_len_id_sorted1[i]][:]*repeat)[:len2]
+        else:
+            # Else shuffle, sample
+            new_class_files[class_len_id_sorted1[i]] =\
+                class_files1[class_len_id_sorted1[i]][:]
+            random.shuffle(new_class_files[class_len_id_sorted1[i]])
+            new_class_files[class_len_id_sorted1[i]] =\
+                new_class_files[class_len_id_sorted1[i]][:len2]
+    return class_id_map1, new_class_files
