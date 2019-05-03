@@ -142,6 +142,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
             torch.save(val_acc_history,
                        model_name + "_" + str(epoch) + ".hist")
         print()
+        dataloader[phase].dataset.reshuffle()
     time_elapsed = time.time() - since
     print("Training complete in {:.0f}m {:.0f}s".format(
         time_elapsed // 60, time_elapsed % 60))
@@ -287,11 +288,15 @@ if __name__ == '__main__':
 
     print("Initializing Datasets and Dataloaders...")
 
+    gamma = 0.5
+    if len(sys.argv) >= 4:
+        gamma = float(sys.argv[3])
     # Create training and validation datasets
     plant_clef_dataset = data_accessor.PlantCLEFDataSet(class_id_map, class_id_list_files)
-    train_dataset = data_accessor.PlantCLEFDataSet(
+    train_dataset = data_accessor.PlantCLEFDataSetWeightOversamp(
             plant_clef_dataset.class_id_map, plant_clef_dataset.class_id_list_files,
-            is_train=True)
+            is_train=True, prefix='/home/guest/groups/irim/clef/LifeCLEF/PlantCLEF2019/train',
+            gamma=gamma)
     # val_dataset = plant_clef_dataset
 
     _, val_dataset = data_accessor.split_dataset(plant_clef_dataset)

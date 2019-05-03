@@ -14,6 +14,127 @@ def my_collate(batch):
     return torch.utils.data.dataloader.default_collate(batch)
 
 
+class PlantCLEFDataSetWeightOversamp(object):
+    def __init__(self, class_id_map, class_id_list_files,
+                 transform=None,
+                 is_train=False, prefix='', gamma=0.5):
+        '''Let's load all the files
+        Args:
+            class_id_map: a mapping from list of id to list of real class id
+            class_id_list_files: the list of list of images files each inner
+            list corresponding to a class's files
+        '''
+        self.class_id_map = class_id_map
+        self.class_id_list_files = class_id_list_files
+        self.prefix = prefix
+        inverse_class_id_map = list(
+            [(class_id[1], class_id[0]) for class_id in class_id_map.items()])
+        self.inverse_class_id_map = dict(inverse_class_id_map)
+
+        self.class_lens = list(
+            [len(class_id_list)
+             for class_id_list in self.class_id_list_files]
+        )
+        # Let's sort classes from lowest to highest
+        # Then resample it so that each class at least a minimum number of
+        # samples
+        self.transform = transform
+        self.class_lens = np.array(self.class_lens)
+        self.oversampling_factors = []
+        self.weight_factors = []
+        if is_train:
+            self.m = np.median(self.class_lens)
+            for class_id in range(len(self.class_id_list_files)):
+                if len(self.class_id_list_files[class_id]) == 0:
+                    continue
+                if len(self.class_id_list_files[class_id]) < self.m:
+                    self.oversampling_factors.append(
+                        (1 + self.m/self.class_lens[class_id])/2)
+                else:
+                    self.oversampling_factors.append(1)
+                self.weight_factors.append(
+                    math.pow(
+                        self.oversampling_factors[class_id] *
+                        self.class_lens[class_id],
+                        gamma - 1))
+        # Renormalize weight factors
+        self.weight_factors = np.array(self.weight_factors)
+        self.oversampling_factors = np.array(self.oversampling_factors)
+        sum_total = np.sum(
+            self.weight_factors*self.oversampling_factors*self.class_lens)
+        normalizing_factor = sum_total / np.sum(self.class_lens)
+        self.weight_factors /= normalizing_factor
+        self.class_lens = np.array(self.weight_factors *\
+            self.oversampling_factors * self.class_lens).astype(np.int)
+        # First time shuffling
+        # Flatten them all then shuffle
+        self.filepath_merged = []
+        for each_class_id in range(len(self.class_id_list_files)):
+            self.filepath_merged.extend(
+                self.class_id_list_files[each_class_id])
+        random.shuffle(self.filepath_merged)
+        # Shuffle them up
+        self.reshuffle()
+
+    def reshuffle(self):
+        self.temp_class_list_files = [
+            [] for i in range(len(self.class_id_list_files))]
+        for class_id in range(len(self.class_id_list_files)):
+            repeat = math.ceil(
+                self.class_lens[class_id]/len(
+                    self.class_id_list_files[class_id])
+            )
+            if len(self.class_id_list_files[class_id]) == 0:
+                continue
+            self.temp_class_list_files[class_id] =\
+                self.class_id_list_files[class_id] * repeat
+            self.temp_class_list_files[class_id] =\
+                self.temp_class_list_files[class_id][
+                    :self.class_lens[class_id]]
+        self.filepath_merged = []
+        for each_class_id in range(len(self.temp_class_list_files)):
+            self.filepath_merged.extend(
+                self.temp_class_list_files[each_class_id])
+        random.shuffle(self.filepath_merged)
+        if len(self.prefix) > 0:
+            self.filepath_merged = [os.path.join(self.prefix, filepath[41:])
+                                    for filepath in self.filepath_merged]
+
+    def __len__(self):
+        return np.sum(self.class_lens)
+
+    def get_random_sample(self):
+        # Get a random image from a random class weighted
+        class_id = choice(self.non_zero_index.shape[0],
+                          p=self.class_weights_normed)
+        sampler_id = choice(
+            len(self.class_id_list_files[self.non_zero_index[class_id]]))
+        # Simply ignore sample if fail to open
+        try:
+            sample = Image.open(
+                self.class_id_list_files[
+                    self.non_zero_index[class_id]
+                ][sampler_id]).convert('RGB')
+        except Exception:
+            return None
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, self.non_zero_index[class_id]
+
+    def __getitem__(self, idx):
+        filepath = self.filepath_merged[idx]
+        try:
+            sample = Image.open(filepath).convert('RGB')
+        except Exception:
+            return None
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        class_name = os.path.basename(os.path.dirname(filepath))
+        class_id = self.inverse_class_id_map[class_name]
+        return sample, class_id
+
+
 class PlantCLEFDataSet(object):
     def __init__(self, class_id_map, class_id_list_files,
                  transform=None,
@@ -34,8 +155,6 @@ class PlantCLEFDataSet(object):
             [len(class_id_list)
              for class_id_list in self.class_id_list_files]
         )
-
-        print("Number of empty class: ", sum([1 for class_len in self.class_lens if class_len ==0]))
         # Let's sort classes from lowest to highest
         # Then resample it so that each class at least a minimum number of
         # samples
@@ -149,7 +268,8 @@ def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
     return train_dataset, val_dataset
 
 
-def remove_file_by_names(class_id_map, class_id_list_files, list_files):
+def remove_file_by_names(class_id_map, class_id_list_files, list_files,
+                         avoid_empty_class=False):
     list_files_names = list([filename.split(".")[0]
                              for filename in list_files])
 
@@ -158,6 +278,8 @@ def remove_file_by_names(class_id_map, class_id_list_files, list_files):
                                  for class_id in class_id_map.items()])
 
     inverse_class_id_map = dict(inverse_class_id_map)
+    class_lens = [len(class_id_list_files[class_id])
+                  for class_id in range(len(class_id_list_files))]
     # Sort it, N log N
 
     # Merge all class file names
@@ -187,6 +309,14 @@ def remove_file_by_names(class_id_map, class_id_list_files, list_files):
                 curr_idx < len(filename_merged) and
                 filename_merged[filename_sorted_idx[curr_idx]] == filename
                   ):
+                file_par_dir = os.path.basename(os.path.dirname(
+                    filepath_merged[filename_sorted_idx[curr_idx]])
+                )
+                original_class_id = inverse_class_id_map[file_par_dir]
+                if class_lens[original_class_id] == 1:
+                    curr_idx += 1
+                    continue
+                class_lens[original_class_id] -= 1
                 deleting_idx.append(filename_sorted_idx[curr_idx])
                 duplicated += 1
                 curr_idx += 1
@@ -226,6 +356,19 @@ def remove_multiples(class_id_map, class_id_list_files, list_multiples,
     return class_id_list_files_new
 
 
+def remove_all_multiples_no_empty(class_id_map,
+                                  class_id_list_files, list_multiples):
+    ''''''
+    # Sorted by number of multipliers
+    list_removes = [filepair for filepair in list_multiples if
+                    filepair[1] > 1]
+    list_removes = sorted(list_removes, key=lambda filepair: filepair[1])[::-1]
+    list_files = [filepair[0] for filepair in list_removes]
+    class_id_list_files_new = remove_file_by_names(
+        class_id_map, class_id_list_files, list_files, True)
+    return class_id_list_files_new
+
+
 def get_list_removed_files(src_dir, dst_dir):
     list_files_src = []
     list_files_dst = []
@@ -261,3 +404,68 @@ def get_list_removed_files(src_dir, dst_dir):
                 curr_idx += 1
     print("List removed len: ", len(list_removeds))
     return list_removeds
+
+
+def get_list_multiples(class_id_map, class_id_list_files):
+    # Merge all class file names
+    # O(N)
+    filepath_merged = []
+    for each_class_id in range(len(class_id_list_files)):
+        filepath_merged.extend(class_id_list_files[each_class_id])
+    # O(N)
+    # Get a new list with names only
+    filename_merged = [os.path.split(filepath)[1].split(".")[0]
+                       for filepath in filepath_merged]
+    # O(N log N)
+    filename_sorted_idx = sorted(range(len(filename_merged)),
+                                 key=lambda idx: filename_merged[idx])
+    last_file_name = filename_merged[filename_sorted_idx[0]]
+    list_multiples = [[last_file_name, 1]]
+    for index in filename_sorted_idx[1:]:
+        if filename_merged[index] == last_file_name:
+            list_multiples[-1][1] += 1
+        else:
+            last_file_name = filename_merged[index]
+            list_multiples.append([last_file_name, 1])
+    return list_multiples
+
+
+def remodel_distribution(dataset1, dataset2):
+    '''Remodel dataset1 samples distribution to that of dataset2
+    dataset: class_id_map and list files
+    '''
+    class_id_map1, class_files1 = dataset1
+    class_id_map2, class_files2 = dataset2
+    assert len(class_files1) == len(class_files2), \
+        "Number of classes must be equal"
+    assert all(len(class_file_list) != 0 for class_file_list in class_files1),\
+        "Number of samples must be atleast 1"
+    # First, get all class lens
+    class_lens1 = [len(class_file_list) for class_file_list in class_files1]
+    class_lens2 = [len(class_file_list) for class_file_list in class_files2]
+    # Then sort them
+    class_len_id_sorted1 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens1[i])
+    class_len_id_sorted2 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens2[i])
+    # Get the inverse map also
+    # inv_maps1 = dict([(item[1], item[0]) for item in class_id_map1.items()])
+    # inv_maps2 = dict([(item[1], item[0]) for item in class_id_map2.items()])
+    new_class_files = [[] for i in range(len(class_files1))]
+    for i, original_id1 in enumerate(class_len_id_sorted1):
+        # Get this class len
+        len1 = class_lens1[original_id1]
+        len2 = class_lens2[class_len_id_sorted2[i]]
+        if len1 < len2:
+            # If len 1 < len 2: repeat
+            repeat = math.ceil(float(len2)/len1)
+            new_class_files[class_len_id_sorted1[i]] = (
+                class_files1[class_len_id_sorted1[i]][:]*repeat)[:len2]
+        else:
+            # Else shuffle, sample
+            new_class_files[class_len_id_sorted1[i]] =\
+                class_files1[class_len_id_sorted1[i]][:]
+            random.shuffle(new_class_files[class_len_id_sorted1[i]])
+            new_class_files[class_len_id_sorted1[i]] =\
+                new_class_files[class_len_id_sorted1[i]][:len2]
+    return class_id_map1, new_class_files
