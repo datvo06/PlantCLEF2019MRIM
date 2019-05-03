@@ -17,7 +17,7 @@ def my_collate(batch):
 class PlantCLEFDataSetWeightOversamp(object):
     def __init__(self, class_id_map, class_id_list_files,
                  transform=None,
-                 is_train=False, gamma=0.5):
+                 is_train=False, prefix='', gamma=0.5):
         '''Let's load all the files
         Args:
             class_id_map: a mapping from list of id to list of real class id
@@ -90,6 +90,11 @@ class PlantCLEFDataSetWeightOversamp(object):
             self.temp_class_list_files[class_id] =\
                 self.temp_class_list_files[class_id][
                     :self.class_lens[class_id]]
+        self.filepath_merged = []
+        for each_class_id in range(len(self.temp_class_list_files)):
+            self.filepath_merged.extend(
+                self.temp_class_list_files[each_class_id])
+        random.shuffle(self.filepath_merged)
 
     def __len__(self):
         return np.sum(self.class_lens)
@@ -124,9 +129,6 @@ class PlantCLEFDataSetWeightOversamp(object):
         class_name = os.path.basename(os.path.dirname(filepath))
         class_id = self.inverse_class_id_map[class_name]
         return sample, class_id
-
-
-
 
 
 class PlantCLEFDataSet(object):
