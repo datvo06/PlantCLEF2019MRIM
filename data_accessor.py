@@ -26,6 +26,7 @@ class PlantCLEFDataSetWeightOversamp(object):
         '''
         self.class_id_map = class_id_map
         self.class_id_list_files = class_id_list_files
+        self.prefix = prefix
         inverse_class_id_map = list(
             [(class_id[1], class_id[0]) for class_id in class_id_map.items()])
         self.inverse_class_id_map = dict(inverse_class_id_map)
@@ -95,6 +96,9 @@ class PlantCLEFDataSetWeightOversamp(object):
             self.filepath_merged.extend(
                 self.temp_class_list_files[each_class_id])
         random.shuffle(self.filepath_merged)
+        if len(self.prefix) > 0:
+            self.filepath_merged = [os.path.join(self.prefix, filepath[41:])
+                                    for filepath in self.filepath_merged]
 
     def __len__(self):
         return np.sum(self.class_lens)
