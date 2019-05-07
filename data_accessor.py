@@ -430,6 +430,30 @@ def get_list_multiples(class_id_map, class_id_list_files):
     return list_multiples
 
 
+def get_common_categories(class_id_map1, class_id_map2):
+    class_names_1 = [pair[1] for pair in class_id_map1.items()]
+    class_names_2 = [pair[1] for pair in class_id_map2.items()]
+    # Sort by names
+    class_names_1 = sorted(class_names_1)
+    class_names_2 = sorted(class_names_2)
+    curr_index = 0
+    commons = []
+    for name in class_names_2:
+        if curr_index == len(class_names_1) - 1:
+            break
+        while(curr_index < (len(class_names_1) -1) and
+              class_names_1[curr_index] < name):
+            curr_index += 1
+        if class_names_1[curr_index] == name:
+            commons.append(name)
+            continue
+    return commons
+
+
+def remap_categories(trainset1, trainset2):
+    pass
+
+
 def remodel_distribution(dataset1, dataset2):
     '''Remodel dataset1 samples distribution to that of dataset2
     dataset: class_id_map and list files

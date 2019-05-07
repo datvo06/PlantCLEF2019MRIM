@@ -1,15 +1,18 @@
 from __future__ import print_function
 from __future__ import division
 import sys
+import glob
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import torchvision
 import pickle
-from torchvision import datasets, models, transforms
+from torchvision import models, transforms
+from data_accessor import PlantCLEFDataSet
 from shufflenet import ShuffleNet
-from quicktest_torchvision import initialize_model, MyImageFolder, my_collate
+from quicktest_torchvision import initialize_model, my_collate
 import torch.utils.data
 from matplotlib import pyplot as plt
 
@@ -30,7 +33,7 @@ data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 model_name = "densenet"
 
 # Number of classes in the dataset
-num_classes = 8500
+num_classes = 10000
 
 # Batch size for training (change depending on how much memory you have)
 batch_size = 32
@@ -43,7 +46,7 @@ num_epochs = 100
 feature_extract = False
 
 
-def eval_model(model, dataloaders, criterion):
+def eval_model(model, dataloaders, criterion, dump_matrix=False):
     global model_name
     since = time.time()
     val_acc_history = []
@@ -78,12 +81,33 @@ def eval_model(model, dataloaders, criterion):
         'val', epoch_loss, epoch_acc)
     )
     time_elapsed = time.time() - since
-    print("Training complete in {:.0f}m {:.0f}s".format(
-        time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:.4f}'.format(best_acc))
-    pickle.dump(confusion_matrix, open('confusion_matrix_' +
-                                       model_name + '.pkl', 'wb'))
+    if dump_matrix:
+        print("Training complete in {:.0f}m {:.0f}s".format(
+            time_elapsed // 60, time_elapsed % 60))
+        print('Best val Acc: {:.4f}'.format(best_acc))
+        pickle.dump(confusion_matrix, open('confusion_matrix_' +
+                                           model_name + '.pkl', 'wb'))
     return model, val_acc_history, confusion_matrix
+
+
+def ensemble_prediction_pooling(list_models, inputs, pool_op=torch.mean):
+    for i, model in enumerate(list_models):
+        list_models[i] = model.to(device)
+    inputs = inputs.to(device)
+    outputs = []
+    for model in list_models:
+        outputs.append(model(inputs))
+    # Let's make average pool
+    # outputs : B x C x 1
+    output = torch.cat(outputs, dim=1)
+    output = pool_op(output, dim=1)
+    return output.items()
+
+
+def ensemble_pooling(outputs, pool_op=torch.mean):
+    output = torch.cat(outputs, dim=1)
+    output = pool_op(output, dim=1)
+    return output.items()
 
 
 def set_parameter_requires_grad(model, feature_extracting):
@@ -123,30 +147,22 @@ def plot_cm(cm, title='reduced confusion matrix', normalize=False):
 
 
 if __name__ == '__main__':
-    model_ft, input_size = initialize_model(
-        model_name, num_classes,
-        feature_extract, use_pretrained=False)
-    if (len(sys.argv) >= 2):
-        try:
-            model_dict = model_ft.state_dict()
-            pretrained_dict = torch.load(sys.argv[1])
-            pretrained_dict = {k: v for k, v in pretrained_dict.items()
-                               if k in model_dict}
-            model_ft.load_state_dict(pretrained_dict)
-        except:
-            pretrained_dict = torch.load(sys.argv[1])
-            model_ft = models.densenet201(pretrained=False)
-            set_parameter_requires_grad(model_ft, feature_extract)
-            num_ftrs = model_ft.classifier.in_features
-            model_ft.classifier = nn.Linear(num_ftrs, 10000)
-            model_dict = model_ft.state_dict()
-            pretrained_dict = torch.load(sys.argv[1])
-            pretrained_dict = {k: v for k, v in pretrained_dict.items()
-                               if k in model_dict}
-            model_ft.load_state_dict(pretrained_dict)
-            num_ftrs = model_ft.classifier.in_features
-            model_ft.classifier = nn.Linear(num_ftrs, num_classes)
-    print(model_ft)
+    if len(sys.argv) < 2:
+        print("Must point to a trainset and a model folder")
+    trainset = pickle.load(open(sys.argv[1], 'rb'))
+    model_lists = []
+    model_dict_paths = glob.glob(os.path.join(sys.argv[2], '*.pth'))
+    for model_dict_path in model_dict_paths:
+        model_ft, input_size = initialize_model(
+            model_name, num_classes,
+            feature_extract, use_pretrained=False)
+        model_dict = model_ft.state_dict()
+        pretrained_dict = torch.load(model_dict_path)
+        pretrained_dict = {k: v for k, v in pretrained_dict.items()
+                           if k in model_dict}
+        model_ft.load_state_dict(pretrained_dict)
+        model_ft = model_ft.to(device)
+        model_lists.append(model_ft)
 
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -162,7 +178,8 @@ if __name__ == '__main__':
     print("Initializing Datasets and Dataloaders...")
 
     # Create training and validation datasets
-    image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
+    image_datasets = {x: PlantCLEFDataSet(trainset[0], trainset[1],
+                                          data_transforms[x])
                       for x in ['val']}
     dataloaders_dict = {
         'val': torch.utils.data.DataLoader(
@@ -172,19 +189,14 @@ if __name__ == '__main__':
                 )
         }
 
-    # Initialize the model for this run
-
-    # Print the model we just instantiated
-
-    # Send the model to GPU
-    model_ft = model_ft.to(device)
     # Setup the loss fxn
     criterion = nn.CrossEntropyLoss()
 
-    # Train and evaluate
+    # evaluate
     model_ft, hist, confusion_matrix = eval_model(model_ft, dataloaders_dict,
                                                   criterion)
     # Sort the confusion matrix from lowest to highest
+    '''
     num_samples_per_classes = np.sum(confusion_matrix, axis=0)
     indices_sum = np.argsort(num_samples_per_classes)
     confusion_matrix = confusion_matrix[indices_sum, :]
@@ -201,3 +213,4 @@ if __name__ == '__main__':
     reduced_confusion_matrix /= reduced_num_samples
     plot_cm(reduced_confusion_matrix)
     plt.savefig('confusion_matrix_' + model_name + '.jpg')
+    '''
