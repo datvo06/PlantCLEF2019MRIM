@@ -192,9 +192,11 @@ if __name__ == '__main__':
     # Setup the loss fxn
     criterion = nn.CrossEntropyLoss()
 
+    for model in model_lists:
+        eval_model(model, dataloaders_dict, criterion)
     # evaluate
-    model_ft, hist, confusion_matrix = eval_model(model_ft, dataloaders_dict,
-                                                  criterion)
+    # model_ft, hist, confusion_matrix = eval_model(model_ft, dataloaders_dict,
+    #                                              criterion)
     # Sort the confusion matrix from lowest to highest
     '''
     num_samples_per_classes = np.sum(confusion_matrix, axis=0)
