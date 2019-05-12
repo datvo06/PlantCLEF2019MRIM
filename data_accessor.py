@@ -478,8 +478,17 @@ def get_unique_samples_from_dataset1(trainset1, trainset2):
     return list_files1_out
 
 
-def remap_categories(trainset1, trainset2):
-    pass
+def remap_categories(class_id_map, class_files_flattened):
+    inverse_class_id_map = dict([(pair[1], pair[0])
+                                 for pair in class_id_map.items()])
+    output_path = [[] for i in range(len(class_id_map.items()))]
+    for filepath in class_files_flattened:
+        file_par_dir = os.path.basename(os.path.dirname(
+                    filepath)
+                )
+        original_class_id = inverse_class_id_map[file_par_dir]
+        output_path[original_class_id].append(filepath)
+    return output_path
 
 
 def remodel_distribution(dataset1, dataset2):
