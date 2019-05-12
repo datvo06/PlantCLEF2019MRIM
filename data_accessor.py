@@ -450,6 +450,34 @@ def get_common_categories(class_id_map1, class_id_map2):
     return commons
 
 
+def get_unique_samples_from_dataset1(trainset1, trainset2):
+    # Let's get the common classes first
+    commons_classes = get_common_categories(trainset1[0], trainset2[0])
+    list_files1_out = []
+    for each_class in commons_classes:
+        list_files1 = trainset1[1][trainset1[0][each_class]]
+        list_files2 = trainset2[1][trainset2[0][each_class]]
+        # Let's get all the filesizes
+        file_sizes1 = [os.path.getsize(filepath) for filepath in list_files1]
+        file_sizes2 = [os.path.getsize(filepath) for filepath in list_files2]
+        # Sort idx by filesizes
+        file_sizes1_idx = sorted(range(len(file_sizes1)),
+                                 key=lambda file_idx: file_sizes1[file_idx])
+        file_sizes2_idx = sorted(range(len(file_sizes2)),
+                                 key=lambda file_idx: file_sizes2[file_idx])
+        curr_idx = 0
+        for fsize_idx in file_sizes2_idx:
+            while (curr_idx < len(file_sizes1) and
+                   file_sizes1[file_sizes1_idx[curr_idx]] <
+                   file_sizes2[fsize_idx]):
+                list_files1_out.append(file_sizes1[file_sizes1_idx[curr_idx]])
+                curr_idx += 1
+                while (file_sizes1[file_sizes1_idx[curr_idx]] ==
+                       file_sizes2[fsize_idx]):
+                    curr_idx += 1
+    return list_files1_out
+
+
 def remap_categories(trainset1, trainset2):
     pass
 
