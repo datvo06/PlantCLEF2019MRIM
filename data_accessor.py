@@ -79,7 +79,7 @@ class PlantCLEFDataSetWeightOversamp(object):
     def reshuffle(self):
         self.temp_class_list_files = [
             [] for i in range(len(self.class_id_list_files))]
-        for class_id in self.class_id_list_files:
+        for class_id in range(len(self.class_id_list_files)):
             repeat = math.ceil(
                 self.class_lens[class_id]/len(
                     self.class_id_list_files[class_id])
@@ -428,67 +428,6 @@ def get_list_multiples(class_id_map, class_id_list_files):
             last_file_name = filename_merged[index]
             list_multiples.append([last_file_name, 1])
     return list_multiples
-
-
-def get_common_categories(class_id_map1, class_id_map2):
-    class_names_1 = [pair[1] for pair in class_id_map1.items()]
-    class_names_2 = [pair[1] for pair in class_id_map2.items()]
-    # Sort by names
-    class_names_1 = sorted(class_names_1)
-    class_names_2 = sorted(class_names_2)
-    curr_index = 0
-    commons = []
-    for name in class_names_2:
-        if curr_index == len(class_names_1) - 1:
-            break
-        while(curr_index < (len(class_names_1) -1) and
-              class_names_1[curr_index] < name):
-            curr_index += 1
-        if class_names_1[curr_index] == name:
-            commons.append(name)
-            continue
-    return commons
-
-
-def get_unique_samples_from_dataset1(trainset1, trainset2):
-    # Let's get the common classes first
-    commons_classes = get_common_categories(trainset1[0], trainset2[0])
-    list_files1_out = []
-    for each_class in commons_classes:
-        list_files1 = trainset1[1][trainset1[0][each_class]]
-        list_files2 = trainset2[1][trainset2[0][each_class]]
-        # Let's get all the filesizes
-        file_sizes1 = [os.path.getsize(filepath) for filepath in list_files1]
-        file_sizes2 = [os.path.getsize(filepath) for filepath in list_files2]
-        # Sort idx by filesizes
-        file_sizes1_idx = sorted(range(len(file_sizes1)),
-                                 key=lambda file_idx: file_sizes1[file_idx])
-        file_sizes2_idx = sorted(range(len(file_sizes2)),
-                                 key=lambda file_idx: file_sizes2[file_idx])
-        curr_idx = 0
-        for fsize_idx in file_sizes2_idx:
-            while (curr_idx < len(file_sizes1) and
-                   file_sizes1[file_sizes1_idx[curr_idx]] <
-                   file_sizes2[fsize_idx]):
-                list_files1_out.append(file_sizes1[file_sizes1_idx[curr_idx]])
-                curr_idx += 1
-                while (file_sizes1[file_sizes1_idx[curr_idx]] ==
-                       file_sizes2[fsize_idx]):
-                    curr_idx += 1
-    return list_files1_out
-
-
-def remap_categories(class_id_map, class_files_flattened):
-    inverse_class_id_map = dict([(pair[1], pair[0])
-                                 for pair in class_id_map.items()])
-    output_path = [[] for i in range(len(class_id_map.items()))]
-    for filepath in class_files_flattened:
-        file_par_dir = os.path.basename(os.path.dirname(
-                    filepath)
-                )
-        original_class_id = inverse_class_id_map[file_par_dir]
-        output_path[original_class_id].append(filepath)
-    return output_path
 
 
 def remodel_distribution(dataset1, dataset2):
