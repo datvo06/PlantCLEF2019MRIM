@@ -5,13 +5,13 @@ import glob
 import os
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import scipy as sp
 import numpy as np
 import torchvision
 import pickle
 from torchvision import models, transforms
-from data_accessor import PlantCLEFDataSet
-from shufflenet import ShuffleNet
+from data_accessor import PlantCLEFDataSet, remap_categories
+from PIL import Image
 from quicktest_torchvision import initialize_model, my_collate
 import torch.utils.data
 from matplotlib import pyplot as plt
@@ -25,9 +25,6 @@ print("Torchvision Version: ", torchvision.__version__)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Top level data directory. Here we assume the format of the directory conforms
 # to the ImageFolder structure
-data_dir = "/video/clef/LifeCLEF/PlantCLEF2019/train/data"
-data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
-
 
 # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
 model_name = "densenet"
@@ -46,7 +43,7 @@ num_epochs = 100
 feature_extract = False
 
 
-def eval_model(model, dataloaders, criterion, dump_matrix=False):
+def eval_list_models(list_models, dataloader, criterion, dump_matrix=False):
     global model_name
     since = time.time()
     val_acc_history = []
@@ -54,17 +51,21 @@ def eval_model(model, dataloaders, criterion, dump_matrix=False):
     confusion_matrix = np.zeros((num_classes, num_classes))
 
     # Each epoch has a training and validation phase
-    model.eval()
+    for model in list_models:
+        model.eval()
     running_loss = 0.0
     running_corrects = 0
     running_samples = 0
-    for inputs, labels in dataloaders['val']:
+    for inputs, labels in dataloader:
         inputs = inputs.to(device)
         labels = labels.to(device)
         with torch.set_grad_enabled(False):
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            _, preds = torch.max(outputs, 1)
+            preds = ensemble_prediction_pooling(
+                list_models, inputs, pool_op=np.max
+            )
+            preds = torch.from_numpy(preds).to(device)
+            loss = criterion(preds, labels)
+            _, preds = torch.max(preds, 1)
         for t, p in zip(labels.view(-1), preds.view(-1)):
             confusion_matrix[t.long(), p.long()] += 1
 
@@ -72,9 +73,9 @@ def eval_model(model, dataloaders, criterion, dump_matrix=False):
         running_corrects += torch.sum(preds == labels.data)
         running_samples += np.prod(list(labels.data.size()))
 
-    epoch_loss = running_loss / len(dataloaders['val'].dataset)
+    epoch_loss = running_loss / len(dataloader.dataset)
     epoch_acc = running_corrects.double() / len(
-        dataloaders['val'].dataset
+        dataloader.dataset
     )
 
     print('{} loss: {:.4f} Acc: {:.4f}'.format(
@@ -89,25 +90,77 @@ def eval_model(model, dataloaders, criterion, dump_matrix=False):
                                            model_name + '.pkl', 'wb'))
     return model, val_acc_history, confusion_matrix
 
-
-def ensemble_prediction_pooling(list_models, inputs, pool_op=torch.mean):
+def ensemble_prediction_pooling(list_models, inputs, pool_op=np.mean):
     for i, model in enumerate(list_models):
         list_models[i] = model.to(device)
     inputs = inputs.to(device)
     outputs = []
-    for model in list_models:
-        outputs.append(model(inputs))
+    with torch.set_grad_enabled(False):
+        for model in list_models:
+            outputs.append(np.reshape(model(inputs).cpu().numpy(), (inputs.size()[0], 10000, 1)))
     # Let's make average pool
     # outputs : B x C x 1
-    output = torch.cat(outputs, dim=1)
-    output = pool_op(output, dim=1)
-    return output.items()
+    # outputs = np.array(outputs)
+    # print(outputs.shape)
+    output = np.concatenate(outputs, axis=2)
+    output = pool_op(output, axis=2)
+    return output
 
 
-def ensemble_pooling(outputs, pool_op=torch.mean):
-    output = torch.cat(outputs, dim=1)
-    output = pool_op(output, dim=1)
-    return output.items()
+def ensemble_pooling(outputs, pool_op=np.mean):
+    output = np.concatenate(outputs, axis=2)
+    output = pool_op(output, axis=2)
+    return output
+
+
+
+def observation_output(list_models, transforms, observation_file_paths, k):
+    '''
+    outputs: list of class probabilities
+    '''
+    output_each_samples = []
+    for each_sample_path in observation_file_paths:
+        inputs = Image.open(each_sample_path)
+        inputs = transforms(inputs)
+        output_each_samples.append(
+            ensemble_prediction_pooling(list_models, inputs))
+    output = ensemble_pooling(output_each_samples, np.max)
+    # Softmax
+    output = sp.special.softmax(output)
+    classes_idx = output.argsort()[-k:][::-1]
+    probs = output[classes_idx]
+    return classes_idx, probs
+
+
+def predict_all_observation(
+        list_models, transforms, observation_ids, prefix, class_id_map, k):
+    observation_ids_results = {}
+    for each_observation_id in observation_ids:
+        observation_ids[each_observation_id] = [
+            os.path.join(prefix, filepath)
+            for filepath in observation_ids[each_observation_id]]
+        class_idx, probs = observation_output(
+            list_models, observation_ids[each_observation_id], k
+        )
+        class_original_ids = [class_id_map[class_id] for class_id in class_idx]
+        observation_ids_results[each_observation_id] = (
+            class_original_ids, probs
+        )
+    return observation_ids_results
+
+
+def run_test(list_models, transforms, observation_ids, prefix, class_id_map, k,
+             output_path='run.txt'):
+    observation_ids_results = predict_all_observation(
+        list_models, transforms, observation_ids, prefix, class_id_map, k)
+    with open(output_path) as output_file:
+        for each_observation_id in observation_ids_results:
+            for i in range(k):
+                output_file.write(
+                    each_observation_id + ";" +
+                    observation_ids_results[each_observation_id][0][k] + ";" +
+                    str(observation_ids_results[each_observation_id][1][k]) +
+                    ";" + str(k+1) + "\n")
 
 
 def set_parameter_requires_grad(model, feature_extracting):
@@ -116,40 +169,22 @@ def set_parameter_requires_grad(model, feature_extracting):
             param.requires_grad = False
 
 
-def plot_cm(cm, title='reduced confusion matrix', normalize=False):
-    fig, ax = plt.subplots()
-    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    ax.figure.colorbar(im, ax=ax)
-    # We want to show all ticks...
-    classes = np.arange(cm.shape[0])
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           # ... and label them with the respective list entries
-           xticklabels=classes, yticklabels=classes,
-           title=title,
-           ylabel='True label',
-           xlabel='Predicted label')
-
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor")
-
-    # Loop over data dimensions and create text annotations.
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], fmt),
-                    ha="center", va="center",
-                    color="white" if cm[i, j] > thresh else "black")
-    fig.tight_layout()
-    return ax
-
-
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Must point to a trainset and a model folder")
     trainset = pickle.load(open(sys.argv[1], 'rb'))
+    list_files_2017_eol = pickle.load(open(
+        './list_unique_2017_common_eol.pkl', 'rb'))
+    list_files_2017_web = pickle.load(open(
+        './list_unique_2017_common_web.pkl', 'rb'))
+    # Let's remaps the 2017 eol and web
+    list_files_all = list_files_2017_web
+    # list_files_all = list_files_2017_eol
+
+    # list_files_all = list_files_2017_eol + list_files_2017_web
+    print(len(list_files_all))
+    new_class_id_list_files = remap_categories(trainset[0], list_files_all)
+
     model_lists = []
     model_dict_paths = glob.glob(os.path.join(sys.argv[2], '*.pth'))
     for model_dict_path in model_dict_paths:
@@ -166,35 +201,21 @@ if __name__ == '__main__':
 
     # Data augmentation and normalization for training
     # Just normalization for validation
-    data_transforms = {
-        'val': transforms.Compose([
+    print("Initializing Datasets and Dataloaders...")
+    data_transform = transforms.Compose([
             transforms.Resize(input_size),
             transforms.CenterCrop(input_size),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ]),
-    }
-
-    print("Initializing Datasets and Dataloaders...")
-
-    # Create training and validation datasets
-    image_datasets = {x: PlantCLEFDataSet(trainset[0], trainset[1],
-                                          data_transforms[x])
-                      for x in ['val']}
-    dataloaders_dict = {
-        'val': torch.utils.data.DataLoader(
-                image_datasets['val'],
-                batch_size=batch_size,
-                num_workers=4, collate_fn=my_collate
-                )
-        }
-
-    # Setup the loss fxn
+        ])
+    image_dataset = PlantCLEFDataSet(trainset[0], new_class_id_list_files,
+                                      data_transform)
+    data_loader = torch.utils.data.DataLoader(image_dataset,
+                                              batch_size=batch_size,
+                                              num_workers=4,
+                                              collate_fn=my_collate)
     criterion = nn.CrossEntropyLoss()
-
-    for i, model in enumerate(model_lists):
-        print("Path: ", model_dict_paths[i])
-        eval_model(model, dataloaders_dict, criterion)
+    eval_list_models(model_lists, data_loader, criterion)
     # evaluate
     # model_ft, hist, confusion_matrix = eval_model(model_ft, dataloaders_dict,
     #                                              criterion)

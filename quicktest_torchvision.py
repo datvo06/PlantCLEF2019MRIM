@@ -1,6 +1,7 @@
 from __future__ import print_function
 from __future__ import division
 import sys
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,6 +11,8 @@ from torchvision import datasets, models, transforms
 from torch.utils.data.dataset import random_split
 from shufflenet import ShuffleNet
 import torch.utils.data
+import data_accessor
+import densenet
 
 
 import time
@@ -28,12 +31,12 @@ data_dir_web = "/video/clef/LifeCLEF/PlantCLEF2017/web/data"
 model_name = "densenet"
 
 # Number of classes in the dataset
-num_classes = 8500
+num_classes = 10000
 
 # Batch size for training (change depending on how much memory you have)
-batch_size = 48
+batch_size = 32
 # Number of epochs to train for
-num_epochs = 100
+num_epochs = 150
 
 # Flag for feature extracting. When False, we finetune the whole model,
 #   when True we only update the reshaped layer params
@@ -69,7 +72,7 @@ class MyImageFolder(datasets.ImageFolder):
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
-                is_inception=False, save_model_every=10):
+                is_inception=False, save_model_every=5, validate=False):
     global model_name
     since = time.time()
     val_acc_history = []
@@ -84,7 +87,10 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
             if phase == 'train':
                 model.train()
             else:
-                model.eval()
+                if validate:
+                    model.eval()
+                else:
+                    continue
             running_loss = 0.0
             running_corrects = 0
             running_samples = 0
@@ -125,10 +131,10 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25,
             print('{} loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc)
             )
-            if phase == 'val' and epoch_acc > best_acc:
+            if (phase == 'val' or not validate) and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
-            if phase == 'val':
+            if (phase == 'val' or not validate):
                 val_acc_history.append(epoch_acc)
         if epoch % save_model_every == 0:
             torch.save(model_ft.state_dict(),
@@ -197,7 +203,7 @@ def initialize_model(model_name, num_classes,
     elif model_name == "densenet":
         """ Densenet
         """
-        model_ft = models.densenet121(pretrained=use_pretrained)
+        model_ft = densenet.densenet201(pretrained=use_pretrained)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier.in_features
         model_ft.classifier = nn.Linear(num_ftrs, num_classes)
@@ -229,21 +235,28 @@ def initialize_model(model_name, num_classes,
 
 if __name__ == '__main__':
     model_ft, input_size = initialize_model(model_name, num_classes,
-                                    feature_extract, use_pretrained=False)
-    if (len(sys.argv) >= 2):
+                                            feature_extract, use_pretrained=False)
+    if (len(sys.argv) < 2):
+        print("Requires at least 2 arguments")
+        exit()
+
+    class_id_map, class_id_list_files = pickle.load(open(sys.argv[1], 'rb'))
+
+
+    if (len(sys.argv) >= 3):
         try:
             model_dict = model_ft.state_dict()
-            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = torch.load(sys.argv[2])
             pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
             model_ft.load_state_dict(pretrained_dict)
         except:
-            pretrained_dict = torch.load(sys.argv[1])
-            model_ft = models.densenet201(pretrained=False)
+            pretrained_dict = torch.load(sys.argv[2])
+            model_ft = densenet.densenet201(pretrained=False)
             set_parameter_requires_grad(model_ft, feature_extract)
             num_ftrs = model_ft.classifier.in_features
             model_ft.classifier = nn.Linear(num_ftrs, 10000)
             model_dict = model_ft.state_dict()
-            pretrained_dict = torch.load(sys.argv[1])
+            pretrained_dict = torch.load(sys.argv[2])
             pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
             model_ft.load_state_dict(pretrained_dict)
             num_ftrs = model_ft.classifier.in_features
@@ -257,6 +270,10 @@ if __name__ == '__main__':
             transforms.RandomResizedCrop(input_size),
             transforms.RandomRotation((0, 360)),
             transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(
+                brightness=0.4,
+                contrast=0.4,
+                saturation=0.4),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
@@ -271,21 +288,16 @@ if __name__ == '__main__':
     print("Initializing Datasets and Dataloaders...")
 
     # Create training and validation datasets
-    image_datasets = {x: MyImageFolder(data_dir, data_transforms[x])
-                      for x in ['train']}
-    weights = make_weights_for_balanced_classes(
-        image_datasets['train'].imgs,
-        len(image_datasets['train'].classes))
+    plant_clef_dataset = data_accessor.PlantCLEFDataSet(class_id_map, class_id_list_files)
+    train_dataset = data_accessor.PlantCLEFDataSet(
+            plant_clef_dataset.class_id_map, plant_clef_dataset.class_id_list_files,
+            is_train=True)
+    # val_dataset = plant_clef_dataset
 
-    weights = torch.DoubleTensor(weights)
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(
-        weights, len(weights))
-
-    '''
-    image_datasets['val'] = MyImageFolder(data_dir_web, data_transforms['val'])
-    '''
-    train_dataset_len = len(image_datasets['train'])
-    _, image_datasets['val'] = random_split(image_datasets['train'],[int(train_dataset_len*0.8), train_dataset_len - int(train_dataset_len*0.8)])
+    _, val_dataset = data_accessor.split_dataset(plant_clef_dataset)
+    train_dataset.transform = data_transforms['train']
+    val_dataset.transform = data_transforms['val']
+    image_datasets = {'train': train_dataset, 'val': val_dataset}
     '''
     '''
     # Create training and validation dataloaders
@@ -293,7 +305,7 @@ if __name__ == '__main__':
         image_datasets['train'],
         batch_size=batch_size,
         num_workers=4, collate_fn=my_collate,
-        sampler=sampler),
+        ),
         'val': torch.utils.data.DataLoader(
                 image_datasets['val'],
                 batch_size=batch_size,
