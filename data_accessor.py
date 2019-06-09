@@ -1,5 +1,6 @@
 from __future__ import print_function, unicode_literals, division
 import os
+import csv
 import pickle
 import torch
 import numpy as np
@@ -231,7 +232,6 @@ class PlantCLEFDataSet(object):
         return sample, class_id
 
 
-
 def split_dataset(plant_clef_dataset, split_ratio_train=0.8):
     class_id_list_files = [class_list_file[:]
                            for class_list_file in
@@ -430,6 +430,30 @@ def get_list_multiples(class_id_map, class_id_list_files):
     return list_multiples
 
 
+def get_class_id_map_family(csv_input_filepath, class_id_map):
+    '''
+    Return class_family_map, family_id_map
+    '''
+    # Loop through each row
+    reader = csv.reader(open(csv_input_filepath, 'r'))
+    inverse_class_id_map = dict(
+        [(pair[1], pair[0]) for pair in class_id_map.items()])
+    class_family_map = {}
+    family_id_map = []
+    for i, each_row in enumerate(reader):
+        if i == 0:
+            continue
+        family_name = each_row[-1]
+        class_name = each_row[0]
+        class_id = inverse_class_id_map[class_name]
+        if family_name not in family_id_map:
+            class_family_map[family_name] = [class_id]
+            family_id_map.append(family_name)
+        else:
+            class_family_map[family_name].append(class_id)
+    return class_family_map, family_id_map
+
+
 def remodel_distribution(dataset1, dataset2):
     '''Remodel dataset1 samples distribution to that of dataset2
     dataset: class_id_map and list files
@@ -469,3 +493,47 @@ def remodel_distribution(dataset1, dataset2):
             new_class_files[class_len_id_sorted1[i]] =\
                 new_class_files[class_len_id_sorted1[i]][:len2]
     return class_id_map1, new_class_files
+
+
+def remodel_distribution_with_test(dataset1, dataset2):
+    '''Remodel dataset1 samples distribution to that of dataset2
+    dataset: class_id_map and list files
+    '''
+    class_id_map1, class_files1 = dataset1
+    class_id_map2, class_files2 = dataset2
+    assert len(class_files1) == len(class_files2), \
+        "Number of classes must be equal"
+    assert all(len(class_file_list) != 0 for class_file_list in class_files1),\
+        "Number of samples must be atleast 1"
+    # First, get all class lens
+    class_lens1 = [len(class_file_list) for class_file_list in class_files1]
+    class_lens2 = [len(class_file_list) for class_file_list in class_files2]
+    # Then sort them
+    class_len_id_sorted1 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens1[i])
+    class_len_id_sorted2 = sorted(range(len(class_lens1)),
+                                  key=lambda i: class_lens2[i])
+    class_list_files_test = [[] for i in range(len(class_files1))]
+    # Get the inverse map also
+    # inv_maps1 = dict([(item[1], item[0]) for item in class_id_map1.items()])
+    # inv_maps2 = dict([(item[1], item[0]) for item in class_id_map2.items()])
+    new_class_files = [[] for i in range(len(class_files1))]
+    for i, original_id1 in enumerate(class_len_id_sorted1):
+        # Get this class len
+        len1 = class_lens1[original_id1]
+        len2 = class_lens2[class_len_id_sorted2[i]]
+        if len1 < len2:
+            # If len 1 < len 2: repeat
+            repeat = math.ceil(float(len2)/len1)
+            new_class_files[class_len_id_sorted1[i]] = (
+                class_files1[class_len_id_sorted1[i]][:]*repeat)[:len2]
+        else:
+            # Else shuffle, sample
+            new_class_files[class_len_id_sorted1[i]] =\
+                class_files1[class_len_id_sorted1[i]][:]
+            random.shuffle(new_class_files[class_len_id_sorted1[i]])
+            class_list_files_test[class_len_id_sorted1[i]] = new_class_files[
+                class_len_id_sorted1[i]][len2:]
+            new_class_files[class_len_id_sorted1[i]] =\
+                new_class_files[class_len_id_sorted1[i]][:len2]
+    return class_id_map1, new_class_files, class_list_files_test
