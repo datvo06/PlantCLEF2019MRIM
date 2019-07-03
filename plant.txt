@@ -1,0 +1,18 @@
+We can tune things
+Manually select: ImageNet, COCO
+
+Classes with 1 sample:  108
+
+Recover the old data!. Update pytorch to ignore classes first.
+Data Augmentation
+
+
+For the only-one images classes:
+- Crawl Image from ... ?
+- Filter them out using a general detection  masked RCNN might be the choice
+Meet on Friday morning, at 10
+
+
+1. Get the list of plant
+2. More filter
+3. 
